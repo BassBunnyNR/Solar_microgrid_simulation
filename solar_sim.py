@@ -1,4 +1,5 @@
 import numpy as np
+
 import matplotlib.pyplot as plt
 
 # ---Constants---
@@ -8,6 +9,7 @@ SOLAR_CAPACITY_KW = 5.0 # Max Power of solar panels
 SUNRISE_HOUR = 6 # Time the sun rises
 SUNSET_HOUR = 18 # Time the sun sets
 SYSTEM_EFFICIENCY = 0.85 # Representing 15% losses (dust, heat, inverter)
+NOISE_LEVEL = 0.1 # Diviation of production
 
 # ---Time Vector---
 # Hour Resolution (0.1 hours - 240 Dots)
@@ -18,6 +20,7 @@ solar_production = []
 #Calculating the length of the day to normalize the sine wave
 day_duration = SUNSET_HOUR - SUNRISE_HOUR
 
+last_val = 0
 
 for h in hours:
     if SUNRISE_HOUR <= h <= SUNSET_HOUR:
@@ -28,10 +31,21 @@ for h in hours:
         # np.sin(angle): Calculates the sine value for the current angle
         raw_power = SOLAR_CAPACITY_KW * np.sin(angle)
 
-        # Applying efficiency factor to represent real-world losses
-        actual_power = raw_power * SYSTEM_EFFICIENCY
-        
-        solar_production.append(actual_power)
+        #  Calculation of diviation
+        std_dev = raw_power * NOISE_LEVEL
+        noisy_power = np.random.normal(raw_power, std_dev) #normal deviation
+
+        # Applying efficiency factor on the noisy power
+        actual_power = noisy_power * SYSTEM_EFFICIENCY
+
+        # Using np.clip to ensure power is never negative
+        # Argument 1: the value to check
+        # Argument 2: minimum allowed, Argument 3: maximum allowed (The theoretical peak * efficiency)
+
+        final_power = np.clip(actual_power, 0, SOLAR_CAPACITY_KW * SYSTEM_EFFICIENCY)
+        smoothed_power = (0.7 * final_power) + (0.3 * last_val)
+        solar_production.append(smoothed_power)
+        last_val = smoothed_power
 
     else:
         solar_production.append(0) # No Production in Night
