@@ -7,29 +7,57 @@ import matplotlib.pyplot as plt
 SOLAR_CAPACITY_KW = 5.0 # Max Power of solar panels
 SUNRISE_HOUR = 6 # Time the sun rises
 SUNSET_HOUR = 18 # Time the sun sets
+SYSTEM_EFFICIENCY = 0.85 # Representing 15% losses (dust, heat, inverter)
 
-# ---Creating Time-Line---
-# Hour Resolution (24 Dots)
+# ---Time Vector---
+# Hour Resolution (0.1 hours - 240 Dots)
 
-hours = np.arange(0,24,1)
+hours = np.arange(0,24,0.1)
 solar_production = []
+
+#Calculating the length of the day to normalize the sine wave
+day_duration = SUNSET_HOUR - SUNRISE_HOUR
+
 
 for h in hours:
     if SUNRISE_HOUR <= h <= SUNSET_HOUR:
-        #Power calculation based on half sin period
-        day_length = SUNSET_HOUR - SUNRISE_HOUR
-        power = SOLAR_CAPACITY_KW * np.sin(np.pi * (h - SUNRISE_HOUR / day_length))
-        solar_production.append(power)
+        # (h - SUNRISE_HOUR) / day_duration: Normalizes the current hour to a 0-1 scale 
+        # multiplying by np.pi creates a half-cycle (0 to π) where sin is always positive
+        angle = np.pi * (h - SUNRISE_HOUR) / day_duration
+
+        # np.sin(angle): Calculates the sine value for the current angle
+        raw_power = SOLAR_CAPACITY_KW * np.sin(angle)
+
+        # Applying efficiency factor to represent real-world losses
+        actual_power = raw_power * SYSTEM_EFFICIENCY
+        
+        solar_production.append(actual_power)
+
     else:
         solar_production.append(0) # No Production in Night
 
         
 # --- Plotting the Graph ---
 
-plt.figure(figsize=(10, 5))
-plt.plot(hours, solar_production, label='Solar Production', color='pink', marker='o')
-plt.xticks(hours) #Presenting all hours on the axis
-plt.grid(True, linestyle='--', alpha=0.6)
+plt.figure(figsize=(12, 6))
+
+# plt.plot: Creates the line graph
+# alpha=0.8: Sets transparency
+plt.plot(hours, solar_production, label='Solar Output (Adjusted)', color='gold', linewidth=2, alpha=0.8)
+
+# plt.fill_between: Fills the area under the curve
+plt.fill_between(hours, solar_production, color='orange', alpha=0.2)
+
+# Setting axis labels and title
+plt.xlabel('Hour of the Day [24h Format]')
+plt.ylabel('Power Output [kW]')
+plt.title('Solar Energy Production Simulation')
+
+# plt.xticks: Customizes the intervals on the X-axis
+plt.xticks(np.arange(0, 25, 1))
+
+plt.grid(True, which='both', linestyle='--', alpha=0.5)
 plt.legend()
-plt.title("Solar Generation Profile - Initial Model")
+
+# Display the final plot
 plt.show()
