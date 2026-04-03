@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 # --- Functions Section ---
 
+# Input Data
 def generate_solar_production(hours, capacity_kw, sunrise_hour, sunset_hour, efficiency, noise_level):
     """
     Calculates solar production based on a sine wave with noise and smoothing.
@@ -46,33 +47,7 @@ def generate_solar_production(hours, capacity_kw, sunrise_hour, sunset_hour, eff
             
     return solar_production
 
-def plot_solar_system(hours, solar_production, house_load):
-    """
-    Handles the visual representation of the data.
-    """
-    plt.figure(figsize=(12, 6))
-
-    # plt.plot: Creates the line graph
-    # alpha=0.8: Sets transparency
-    plt.plot(hours, solar_production, label='Solar Output (Adjusted)', color='gold', linewidth=2, alpha=0.8)
-    plt.plot(hours, house_load, label='House Load', color='blue')
-    # plt.fill_between: Fills the area under the curve
-    plt.fill_between(hours, solar_production, color='orange', alpha=0.2)
-
-    # Setting axis labels and title
-    plt.xlabel('Hour of the Day [24h Format]')
-    plt.ylabel('Power Output [kW]')
-    plt.title('Solar Energy Production Simulation')
-
-    # plt.xticks: Customizes the intervals on the X-axis
-    plt.xticks(np.arange(0, 25, 1))
-
-    plt.grid(True, which='both', linestyle='--', alpha=0.5)
-    plt.legend()
-
-    # Display the final plot
-    plt.show()
-
+# Load Data
 def generate_load_data(hours, base_load, morning_peak_kw, evening_peak_kw):
     """
     Generates a typical residential 'Duck Curve' load profile.
@@ -97,16 +72,81 @@ def generate_load_data(hours, base_load, morning_peak_kw, evening_peak_kw):
         
     return load_profile
 
+# Defining relay working conditions
+# When we have surplass of 0.2KW, turns on
+def simulate_relay_logic(net_power, threshold=0.2):
+    """
+    Decides when to switch the relay ON (1) or OFF (0)
+    """
+    relay_status = []
+    for val in net_power:
+        if val > threshold:
+            relay_status.append(1) # Relay ON
+        else:
+            relay_status.append(0) # Relay OFF
+    return np.array(relay_status) # Convert to numpy array
+
+# Graph plotting
+def plot_solar_system(hours, solar_production, house_load, relay_status):
+    """
+    Visualizes Energy Profiles and Relay Status with Dark Mode.
+    Includes surplus fill and fixed status bar.
+    """
+    # Enable Dark Mode
+    plt.style.use('dark_background')
+    
+    # Ensure everything is a numpy array for correct indexing and operations
+    h = np.asarray(hours)
+    s = np.asarray(solar_production)
+    l = np.asarray(house_load)
+    r = np.asarray(relay_status)
+    net_p = s - l
+
+    # Create subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), 
+                                   gridspec_kw={'height_ratios': [5, 1]}, 
+                                   sharex=True)
+    plt.subplots_adjust(hspace=0.1)
+
+    # --- Top Plot: Energy ---
+    ax1.plot(h, s, label='Solar Output', color="#D5BC2B", linewidth=2)
+    ax1.plot(h, l, label='House Load', color='#00FFFF', linewidth=1.5)
+    ax1.plot(h, net_p, label='Net Power (Surplus)', color='#32CD32', linestyle='--', alpha=0.6)
+    
+    # Add Fill between Net Power and 0 (The Surplus Zone)
+    ax1.fill_between(h, net_p, 0, where=(net_p > 0), color='#32CD32', alpha=0.15, label='Surplus Energy')
+    ax1.fill_between(h, net_p, 0, where=(net_p <= 0), color='red', alpha=0.05)
+
+    ax1.set_ylabel('Power [kW]')
+    ax1.set_title('Solar Microgrid Simulation - Energy & Relay Status')
+    ax1.grid(True, linestyle=':', alpha=0.3)
+    ax1.legend(loc='upper right')
+    ax1.set_xticks(np.arange(0, 25, 1))
+
+    # --- Bottom Plot: Relay Status Bar ---
+    # Fix: Draw the bar by checking each segment
+    # We use 'where' logic with the full range of h
+    ax2.fill_between(h, 0, 1, where=(r == 1), color='lime', alpha=0.7, step='post')
+    ax2.fill_between(h, 0, 1, where=(r == 0), color='red', alpha=0.7, step='post')
+
+    ax2.set_yticks([]) 
+    ax2.set_ylim(0, 1) 
+    ax2.set_xlabel('Hour of the Day [24h Format]')
+    ax2.set_ylabel('Relay', rotation=0, labelpad=20, verticalalignment='center')
+    
+    plt.show()
+
+
 # --- Main Execution Section ---
 
 def main():
     # ---Constants---
     # *** NOT REAL VALUES ***
     SOLAR_CAPACITY_KW = 5.0 # Max Power of solar panels
-    SUNRISE_HOUR = 6        # Time the sun rises
-    SUNSET_HOUR = 18       # Time the sun sets
+    SUNRISE_HOUR = 6 # Time the sun rises
+    SUNSET_HOUR = 18 # Time the sun sets
     SYSTEM_EFFICIENCY = 0.85 # Representing 15% losses (dust, heat, inverter)
-    NOISE_LEVEL = 0.1      # Deviation of production
+    NOISE_LEVEL = 0.1 # Deviation of production
 
     # ---Time Vector---
     # Hour Resolution (0.1 hours - 240 Dots)
@@ -128,8 +168,16 @@ def main():
         morning_peak_kw=1.5,
         evening_peak_kw=3.5
     )
+   
+    # Calculate Net Power (Surplus = Positive, Deficit = Negative)
+    # Using np.array for element-wise subtraction
+    net_power = np.array(solar_data) - np.array(load_data)
+
+    # Generate 0/1 as Relay Status
+    relay_status_results = simulate_relay_logic(net_power, threshold=0.2)
+
     # Plot the results
-    plot_solar_system(hours, solar_data, load_data)
+    plot_solar_system(hours, solar_data, load_data, relay_status_results)
 
 # This standard boilerplate ensures the script runs only if executed directly
 if __name__ == "__main__":
