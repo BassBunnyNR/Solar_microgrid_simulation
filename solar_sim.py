@@ -86,6 +86,56 @@ def simulate_relay_logic(net_power, threshold=0.2):
             relay_status.append(0) # Relay OFF
     return np.array(relay_status) # Convert to numpy array
 
+# System modes - Selling/Buying/Charging/Discharging
+def simulate_smart_grid(hours, net_power, battery_capacity=10.0):
+    """
+    Simulates a smart home with battery priority.
+    battery_capacity: kWh (Standard home battery)
+    """
+    BUY_PRICE = 0.60 
+    SELL_PRICE = 0.45
+    
+    soc = 0 # State of Charge in kWh
+    daily_balance = 0
+    battery_history = []
+    
+    # Modes: 0=Buying, 1=Charging, 2=Selling, 3=Discharging
+    grid_mode = [] 
+
+    dt = 0.1 # Hour step
+
+    for p in net_power:
+        if p > 0: # --- SURPLUS ---
+            if soc < battery_capacity:
+                # Priority 1: Charge Battery
+                charge = p * dt
+                soc = min(battery_capacity, soc + charge)
+                grid_mode.append(1) # Charging
+            else:
+                # Priority 2: Sell to Grid
+                sell_revenue = p * dt * SELL_PRICE
+                daily_balance += sell_revenue
+                grid_mode.append(2) # Selling
+        
+        else: # --- DEFICIT ---
+            needed = abs(p) * dt
+            if soc > 0:
+                # Priority 1: Use Battery
+                use_from_batt = min(soc, needed)
+                soc -= use_from_batt
+                needed -= use_from_batt
+                grid_mode.append(3) # Discharging
+            
+            if needed > 0:
+                # Priority 2: Buy from Grid
+                cost = needed * BUY_PRICE
+                daily_balance -= cost
+                if p < 0 and soc <= 0: grid_mode.append(0) # Buying
+
+        battery_history.append((soc / battery_capacity) * 100)
+
+    return battery_history, daily_balance, grid_mode
+
 # Graph plotting
 def plot_solar_system(hours, solar_production, house_load, relay_status):
     """
@@ -114,8 +164,8 @@ def plot_solar_system(hours, solar_production, house_load, relay_status):
     ax1.plot(h, net_p, label='Net Power (Surplus)', color='#32CD32', linestyle='--', alpha=0.6)
     
     # Add Fill between Net Power and 0 (The Surplus Zone)
-    ax1.fill_between(h, net_p, 0, where=(net_p > 0), color='#32CD32', alpha=0.15, label='Surplus Energy')
-    ax1.fill_between(h, net_p, 0, where=(net_p <= 0), color='red', alpha=0.05)
+    ax1.fill_between(h, net_p, 0, where=(net_p > 0), color='#32CD32', alpha=0.25, label='Surplus Energy')
+    ax1.fill_between(h, net_p, 0, where=(net_p <= 0), color='red', alpha=0.25)
 
     ax1.set_ylabel('Power [kW]')
     ax1.set_title('Solar Microgrid Simulation - Energy & Relay Status')
@@ -176,9 +226,18 @@ def main():
     # Generate 0/1 as Relay Status
     relay_status_results = simulate_relay_logic(net_power, threshold=0.2)
 
+    # Getting Battery and Grid information
+    battery_history, daily_balance, grid_mode = simulate_smart_grid(hours, net_power, battery_capacity=10.0)
+
     # Plot the results
     plot_solar_system(hours, solar_data, load_data, relay_status_results)
 
+    print(f"--- Daily Financial Summary ---")
+    print(f"Total Money Balance: {daily_balance:.2f}₪")
+    if daily_balance > 0:
+        print("Profit today! 🌞")
+    else:
+        print("Grid cost today. 🌚")
 # This standard boilerplate ensures the script runs only if executed directly
 if __name__ == "__main__":
     main()
