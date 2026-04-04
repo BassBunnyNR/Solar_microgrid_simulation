@@ -136,6 +136,28 @@ def simulate_smart_grid(hours, net_power, battery_capacity=10.0):
 
     return battery_history, daily_balance, grid_mode
 
+# Financial calculations
+def show_financial_report(daily_balance, load_data):
+    # Total consumption in kWh (Power * Time)
+    total_consumed_kwh = np.sum(load_data) * 0.1
+    # Cost if we had NO solar system
+    original_cost = total_consumed_kwh * 0.60
+    # Current bill is the absolute value of our daily_balance (if negative)
+    current_bill = abs(daily_balance) if daily_balance < 0 else 0
+    # Total savings
+    daily_savings = original_cost - current_bill
+
+    # --- Print Report to Terminal ---
+    print("\n" + "="*35)
+    print("      DAILY ENERGY REPORT")
+    print("="*35)
+    print(f"Original Cost (No Solar): ₪{original_cost:.2f}")
+    print(f"Current Grid Bill:        ₪{current_bill:.2f}")
+    print(f"-----------------------------------")
+    print(f"NET SAVINGS TODAY:        ₪{daily_savings:.2f}")
+    print("="*35 + "\n")
+
+
 # Graph plotting
 def plot_solar_system(hours, solar_production, house_load, relay_status):
     """
@@ -186,6 +208,45 @@ def plot_solar_system(hours, solar_production, house_load, relay_status):
     
     plt.show()
 
+    # Generating and plotting battery and grid parameters
+def plot_battery_status(hours, battery_history, grid_mode):
+    """Visualizes battery SOC and grid operational modes."""
+    plt.style.use('dark_background')
+    
+    # Force alignment of data lengths
+    min_size = min(len(hours), len(battery_history), len(grid_mode))
+    h = np.asarray(hours)[:min_size]
+    batt = np.asarray(battery_history)[:min_size]
+    mode = np.asarray(grid_mode)[:min_size]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), gridspec_kw={'height_ratios': [4, 1]}, sharex=True)
+    plt.subplots_adjust(hspace=0.1)
+    
+    # Top Plot: Battery Charge Level
+    ax1.plot(h, batt, color='#00FF00', linewidth=2, label='Battery SOC %')
+    ax1.fill_between(h, batt, color='#00FF00', alpha=0.2)
+    ax1.set_ylabel('Charge [%]')
+    ax1.set_ylim(0, 105)
+    ax1.set_title('Storage Logic: Battery SOC & Grid Interaction')
+    ax1.grid(True, linestyle=':', alpha=0.3)
+
+    # Bottom Plot: Grid Modes
+    # 0:Buy (Red), 1:Charge (Lime), 2:Sell (Cyan), 3:Discharge (Orange)
+    colors = {0: 'red', 1: 'lime', 2: 'cyan', 3: 'orange'}
+    for m in range(4):
+        ax2.fill_between(h, 0, 1, where=(mode == m), color=colors[m], alpha=0.8, step='post')
+    
+    ax2.set_yticks([])
+    ax2.set_ylabel('Mode')
+    ax2.set_xlabel('Hour of the Day [24h Format]')
+    
+    # Add a small legend for the modes
+    from matplotlib.lines import Line2D
+    custom_lines = [Line2D([0], [0], color=colors[i], lw=4) for i in range(4)]
+    ax2.legend(custom_lines, ['Buy', 'Charge', 'Sell', 'Discharge'], 
+               loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=4, fontsize='small')
+    
+    plt.show()
 
 # --- Main Execution Section ---
 
@@ -229,15 +290,23 @@ def main():
     # Getting Battery and Grid information
     battery_history, daily_balance, grid_mode = simulate_smart_grid(hours, net_power, battery_capacity=10.0)
 
-    # Plot the results
-    plot_solar_system(hours, solar_data, load_data, relay_status_results)
+    # ---MENU---
+    while True:
+        print("---Control Menu---")
+        print("1. Production Graphs\n2. Battery Status\n3. Financial Report\n4. Exit")
+        choice = input("Select: ")
 
-    print(f"--- Daily Financial Summary ---")
-    print(f"Total Money Balance: {daily_balance:.2f}₪")
-    if daily_balance > 0:
-        print("Profit today! 🌞")
-    else:
-        print("Grid cost today. 🌚")
+        if choice == '1':
+            plot_solar_system(hours, solar_data, load_data, relay_status_results)
+        elif choice == '2':
+            plot_battery_status(hours, battery_history, grid_mode)
+        elif choice == '3':
+            show_financial_report(daily_balance, load_data)
+        elif choice == '4':
+            break
+
+    # Plot the results
+
 # This standard boilerplate ensures the script runs only if executed directly
 if __name__ == "__main__":
     main()
